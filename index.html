@@ -1,0 +1,1315 @@
+<!DOCTYPE html>
+<html lang="tr" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Soru & Cesaret | Sade Parti Oyunu</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Mobil klavye açıldığında ekranın taşmasını önleyen dinamik yükseklik */
+        html, body {
+            height: 100dvh;
+            background-color: #09090b; /* zinc-950 */
+            color: #e4e4e7; /* zinc-200 */
+            overscroll-behavior: none;
+        }
+        .clean-scroll::-webkit-scrollbar { width: 5px; }
+        .clean-scroll::-webkit-scrollbar-track { background: transparent; }
+        .clean-scroll::-webkit-scrollbar-thumb { background: #27272a; border-radius: 9999px; }
+        .clean-scroll::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+    </style>
+</head>
+<body class="antialiased selection:bg-indigo-500/30 selection:text-indigo-200 flex flex-col overflow-hidden">
+
+    <!-- BİLDİRİM TOAST ALANI -->
+    <div id="toast-container" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 w-full max-w-sm px-4 pointer-events-none"></div>
+
+    <!-- =====================================================================
+         1. EKRAN: GİRİŞ (TAKMA AD)
+    ====================================================================== -->
+    <section id="view-auth" class="flex-1 flex flex-col justify-center items-center p-5 overflow-y-auto">
+        <div class="w-full max-w-sm space-y-6">
+            <div class="space-y-1.5 text-center">
+                <h1 class="text-2xl font-bold tracking-tight text-zinc-100">Soru & Cesaret</h1>
+                <p class="text-sm text-zinc-400">Odalara katılmak için takma adını yaz.</p>
+            </div>
+
+            <form id="nickname-form" class="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-5 space-y-4">
+                <div>
+                    <label for="nickname-input" class="block text-xs font-medium text-zinc-400 mb-1.5">Takma Ad</label>
+                    <input type="text" id="nickname-input" maxlength="16" required placeholder="Örn: Deniz, Gece..."
+                        class="w-full px-4 py-3.5 rounded-xl bg-zinc-950 border border-zinc-800 text-base text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition">
+                </div>
+                <button type="submit"
+                    class="w-full py-3.5 px-4 rounded-xl font-semibold text-sm text-white bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 transition">
+                    Devam Et
+                </button>
+            </form>
+
+            <div class="flex items-center justify-center gap-2 text-xs text-zinc-500">
+                <span id="conn-dot" class="w-2 h-2 rounded-full bg-amber-500"></span>
+                <span id="conn-text">Sunucuya bağlanıyor...</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- =====================================================================
+         2. EKRAN: LOBİ (GENEL ODALAR & ÖZEL ODA)
+    ====================================================================== -->
+    <section id="view-lobby" class="hidden flex-1 flex flex-col overflow-hidden max-w-3xl w-full mx-auto">
+        <!-- Lobi Üst Bar -->
+        <header class="px-4 py-3.5 border-b border-zinc-800/80 flex items-center justify-between shrink-0">
+            <div>
+                <h2 class="text-base font-bold text-zinc-100">Odalar</h2>
+                <p class="text-xs text-zinc-500">Oyuncu: <span id="lobby-nick" class="text-zinc-300 font-medium"></span></p>
+            </div>
+            <button id="change-nick-btn" class="px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 bg-zinc-900 border border-zinc-800">
+                İsim Değiştir
+            </button>
+        </header>
+
+        <!-- Lobi Kaydırılabilir İçerik -->
+        <div class="flex-1 overflow-y-auto clean-scroll p-4 space-y-5">
+            <!-- Hızlı Oda İşlemleri -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button id="create-public-btn"
+                    class="p-4 rounded-2xl bg-zinc-900 hover:bg-zinc-800/90 border border-zinc-800 text-left transition flex items-center justify-between">
+                    <div>
+                        <div class="text-sm font-semibold text-zinc-100">Genel Oda Aç</div>
+                        <div class="text-xs text-zinc-400 mt-0.5">Herkese açık • Maks. 10 kişi</div>
+                    </div>
+                    <span class="text-zinc-400 text-lg">+</span>
+                </button>
+
+                <button id="create-private-btn"
+                    class="p-4 rounded-2xl bg-zinc-900 hover:bg-zinc-800/90 border border-zinc-800 text-left transition flex items-center justify-between">
+                    <div>
+                        <div class="text-sm font-semibold text-zinc-100">Özel Oda Kur</div>
+                        <div class="text-xs text-zinc-400 mt-0.5">6 haneli kodlu • Maks. 8 kişi</div>
+                    </div>
+                    <span class="text-zinc-400 text-sm font-mono">#KOD</span>
+                </button>
+            </div>
+
+            <!-- Kod ile Katıl -->
+            <form id="join-code-form" class="flex gap-2">
+                <input type="text" id="invite-code-input" maxlength="6" placeholder="Özel oda kodu (Örn: X9K2L1)" required
+                    class="flex-1 px-4 py-3 rounded-xl bg-zinc-900 border border-zinc-800 text-sm text-zinc-100 uppercase font-mono tracking-wider placeholder-zinc-600 focus:outline-none focus:border-indigo-500">
+                <button type="submit"
+                    class="px-5 py-3 rounded-xl font-semibold text-sm text-white bg-indigo-600 hover:bg-indigo-500 transition shrink-0">
+                    Koda Katıl
+                </button>
+            </form>
+
+            <!-- Aktif 10 Kişilik Odalar -->
+            <div class="space-y-2.5">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-xs font-semibold uppercase tracking-wider text-zinc-400">Aktif Genel Odalar (10 Kişilik)</h3>
+                    <span id="rooms-count" class="text-xs text-zinc-500">0 oda</span>
+                </div>
+                <div id="public-rooms-list" class="space-y-2.5">
+                    <!-- Oda satırları -->
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- =====================================================================
+         3. EKRAN: AKTİF OYUN ODASI (ÜST SAHNE + ALT GENİŞ SOHBET)
+    ====================================================================== -->
+    <section id="view-room" class="hidden flex-1 flex flex-col h-[100dvh] max-w-3xl w-full mx-auto overflow-hidden relative">
+
+        <!-- A. İNCE ÜST HEADER -->
+        <header class="px-3 py-2.5 bg-zinc-950 border-b border-zinc-800/90 flex items-center justify-between gap-2 shrink-0">
+            <div class="flex items-center gap-2 min-w-0">
+                <button id="leave-room-btn" aria-label="Odadan Çık"
+                    class="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-medium text-zinc-300 shrink-0">
+                    ← Çık
+                </button>
+                <div class="min-w-0">
+                    <div class="flex items-center gap-1.5">
+                        <h2 id="room-name" class="text-sm font-bold text-zinc-100 truncate">Oda</h2>
+                        <button id="copy-code-btn" title="Oda kodunu kopyala"
+                            class="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-[11px] font-mono text-zinc-400 hover:text-zinc-200 shrink-0">
+                            <span id="room-code-badge">------</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-1.5 shrink-0">
+                <button id="add-bot-btn"
+                    class="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-medium text-zinc-300">
+                    + Botla Test Et
+                </button>
+                <button id="toggle-players-btn"
+                    class="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-semibold text-indigo-400 flex items-center gap-1">
+                    <span>Oyuncular & Skor</span>
+                    <span id="room-count-badge" class="text-zinc-300">(1/10)</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- AÇILIR OYUNCULAR & SKOR ÇEKMECESİ (MODAL/PANEL) -->
+        <div id="players-drawer" class="hidden absolute inset-x-0 top-[49px] z-30 bg-zinc-900/95 backdrop-blur-md border-b border-zinc-800 p-4 shadow-2xl">
+            <div class="flex items-center justify-between mb-3">
+                <span class="text-xs font-semibold uppercase tracking-wider text-zinc-400">Odadaki Oyuncular & Puanlar</span>
+                <button id="close-players-btn" class="text-xs text-zinc-400 hover:text-white px-2 py-1">Kapat ✕</button>
+            </div>
+            <div id="players-list" class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto clean-scroll">
+                <!-- Oyuncu listesi -->
+            </div>
+        </div>
+
+        <!-- B. ÜST-ORTA KOMPAKT SORU-CEVAP SAHNESİ (~%35-40 Alan) -->
+        <div class="bg-zinc-900/70 border-b border-zinc-800 px-3.5 py-3 shrink-0 space-y-2.5">
+            <!-- Durum & Eşleşme Satırı -->
+            <div class="flex items-center justify-between gap-2 text-xs">
+                <div class="flex items-center gap-1.5 truncate">
+                    <span id="stage-status-label" class="font-semibold text-zinc-400">Bekleniyor</span>
+                    <span id="matchup-inline" class="hidden text-zinc-300 truncate">
+                        • <strong id="q-name" class="text-indigo-400"></strong> → <strong id="a-name" class="text-emerald-400"></strong>
+                    </span>
+                </div>
+                <span id="stage-timer-pill" class="hidden px-2 py-0.5 rounded-md bg-zinc-800 font-mono text-xs font-bold text-amber-400 shrink-0">
+                    30s
+                </span>
+            </div>
+
+            <!-- Soru / Cevap İçerik Alanı -->
+            <div id="stage-content-box" class="text-sm text-zinc-200 leading-snug">
+                Odada en az 2 kişi olduğunda oyun otomatik başlayacak.
+            </div>
+
+            <!-- Aktif Giriş Formları (Sadece Yetkili Kişiye Görünür) -->
+            <!-- 1. Soran Formu -->
+            <form id="question-form" class="hidden space-y-2 pt-1">
+                <div class="flex gap-2">
+                    <input type="text" id="question-input" maxlength="220" required placeholder="Sorunu yaz..."
+                        class="flex-1 px-3 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-indigo-500">
+                    <button type="button" id="suggest-q-btn" title="Bot havuzundan soru öner"
+                        class="px-3 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 shrink-0">
+                        Soru Öner
+                    </button>
+                    <button type="submit"
+                        class="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white shrink-0">
+                        Sor
+                    </button>
+                </div>
+            </form>
+
+            <!-- 2. Cevaplayan Formu -->
+            <form id="answer-form" class="hidden pt-1">
+                <div class="flex gap-2">
+                    <input type="text" id="answer-input" maxlength="260" required placeholder="30 saniye içinde cevabını yaz..."
+                        class="flex-1 px-3 py-2.5 rounded-xl bg-zinc-950 border border-emerald-600/60 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-emerald-500">
+                    <button type="submit"
+                        class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold text-white shrink-0">
+                        Cevapla
+                    </button>
+                </div>
+            </form>
+
+            <!-- 3. Puanlama Paneli (10 Saniyelik Kompakt Yıldızlar) -->
+            <div id="rating-box" class="hidden pt-1 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div class="flex items-center gap-1.5">
+                    <span class="text-zinc-400">Soru:</span>
+                    <div class="flex gap-1" id="q-stars">
+                        <button type="button" data-type="q" data-val="1" class="rate-btn px-2 py-1 rounded bg-zinc-800 text-zinc-300">1★</button>
+                        <button type="button" data-type="q" data-val="2" class="rate-btn px-2 py-1 rounded bg-zinc-800 text-zinc-300">2★</button>
+                        <button type="button" data-type="q" data-val="3" class="rate-btn px-2 py-1 rounded bg-zinc-800 text-zinc-300">3★</button>
+                        <button type="button" data-type="q" data-val="4" class="rate-btn px-2 py-1 rounded bg-zinc-800 text-zinc-300">4★</button>
+                        <button type="button" data-type="q" data-val="5" class="rate-btn px-2 py-1 rounded bg-zinc-800 text-zinc-300">5★</button>
+                    </div>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <span class="text-zinc-400">Cevap:</span>
+                    <div class="flex gap-1" id="a-stars">
+                        <button type="button" data-type="a" data-val="1" class="rate-btn px-2 py-1 rounded bg-zinc-800 text-zinc-300">1★</button>
+                        <button type="button" data-type="a" data-val="2" class="rate-btn px-2 py-1 rounded bg-zinc-800 text-zinc-300">2★</button>
+                        <button type="button" data-type="a" data-val="3" class="rate-btn px-2 py-1 rounded bg-zinc-800 text-zinc-300">3★</button>
+                        <button type="button" data-type="a" data-val="4" class="rate-btn px-2 py-1 rounded bg-zinc-800 text-zinc-300">4★</button>
+                        <button type="button" data-type="a" data-val="5" class="rate-btn px-2 py-1 rounded bg-zinc-800 text-zinc-300">5★</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- C. ALT BÜYÜK ODA SOHBETİ (EKRANIN EN AZ %60'I - MOBİL ÖNCELİKLİ) -->
+        <div class="flex-1 min-h-0 flex flex-col bg-zinc-950">
+            <!-- Mesaj Akışı -->
+            <div id="chat-messages" class="flex-1 overflow-y-auto clean-scroll px-3.5 py-3 space-y-2.5">
+                <!-- Mesaj baloncukları -->
+            </div>
+
+            <!-- Büyük Dokunmatik Sohbet Giriş Çubuğu -->
+            <form id="chat-form" class="p-2.5 sm:p-3 bg-zinc-900/90 border-t border-zinc-800 flex items-center gap-2 shrink-0">
+                <input type="text" id="chat-input" maxlength="240" required autocomplete="off"
+                    placeholder="Odadakilere mesaj yaz..."
+                    class="flex-1 px-4 py-3.5 rounded-2xl bg-zinc-950 border border-zinc-800 text-base sm:text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-indigo-500">
+                <button type="submit"
+                    class="px-5 py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-sm font-semibold text-white shrink-0 transition">
+                    Gönder
+                </button>
+            </form>
+        </div>
+
+    </section>
+
+    <!-- =====================================================================
+         OYUN MANTIĞI (FIREBASE FIRESTORE + YEREL SİMÜLASYON YEDEĞİ)
+    ====================================================================== -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // =========================================================================
+        // 1. bot.py İÇERİSİNDEKİ 50 SORULUK ORİJİNAL HAVUZ
+        // =========================================================================
+        const SORULAR = [
+            "Şu an aklından geçen en yaramaz düşünce ne?",
+            "Hayatında yaptığın en cesur flört hareketi neydi?",
+            "Bir kişide seni en çok tahrik eden şey ne?",
+            "İlk öpücüğünü kiminle yaşadın ve ne hissettin?",
+            "Hiç bir gecelik bir ilişki yaşadın mı? Yaşamadıysan yaşar mıydın?",
+            "Karşındakinde ilk neye bakarsın?",
+            "Boynun mu, kulağın mı, dudakların mı: en hassas noktan neresi?",
+            "Hiç partnerinin telefonuna gizlice baktın mı? Ne buldun?",
+            "Bir partnerde 'anında soğurum' dediğin şey ne?",
+            "İlk buluşmada ileri gittin mi? Pişman oldun mu?",
+            "Bu gruptan biriyle öpüşmek zorunda kalsan kim olurdu?",
+            "Anlatabileceğin en tuhaf fantezin ne?",
+            "Yakalanma riski olan bir yerde romantik bir an yaşadın mı?",
+            "Mesajlaşırken attığın en cüretkar mesaj neydi?",
+            "Hiç birine seksi bir fotoğraf gönderdin mi? Pişman oldun mu?",
+            "Partnerinden duymak istediğin en etkileyici cümle ne?",
+            "Şu ana kadar kaç kişiyle öpüştün? Sayıyı hatırlıyor musun?",
+            "Gece yarısı biri sana 'bize gel' yazsa ne yaparsın?",
+            "Hiç eski sevgiline gece yarısı yazıp pişman oldun mu?",
+            "En çok pişman olduğun romantik ya da cinsel deneyimin ne?",
+            "Bir ünlüyle tek bir gece geçirme şansın olsa kim olurdu?",
+            "Yavaş ve romantik mi, tutkulu ve hızlı mı? Hangisi sen?",
+            "Hiç arkadaşının eski sevgilisiyle bir şey yaşadın mı?",
+            "En utanç verici 'yanlış kişiye mesaj attım' anın neydi?",
+            "Bir buluşmada yaşadığın en rezil an neydi?",
+            "Birinin seni baştan çıkarmasına izin verdin mi? Kimdi?",
+            "Hiç aynı gün içinde birden fazla kişiyle flört ettin mi?",
+            "Kendini en çekici hissettiğin an neydi?",
+            "Aşk mı, tutku mu? Senin için hangisi daha önemli, dürüst ol.",
+            "Hiç sevmediğin birine sırf fiziksel çekimden dolayı yakınlaştın mı?",
+            "İlk deneyimini anlat, ne kadar anlatmak istersen.",
+            "Yakınlaşma sırasında yaşadığın en komik ya da utanç verici şey neydi?",
+            "Bu gruptan birini bir saatliğine sevgilin yapabilsen kim olurdu?",
+            "Gruptaki kim en iyi öpüşür sence?",
+            "Gruptaki en flörtöz kişi kim?",
+            "Bu gruptan biri hakkında hiç 'ya olsa' diye düşündün mü?",
+            "Partnerine hiç söylemediğin bir itirafın var mı?",
+            "Hayatındaki en uzun öpücük ne kadar sürdü?",
+            "Telefonunda sakladığın en cüretkar şey ne?",
+            "Hiç sınırı aşan bir flört yaşadın mı? Ne oldu?",
+            "Karanlıkta mı, ışıkta mı? Neden?",
+            "Bir gecede nelere 'evet', nelere 'asla' derdin?",
+            "Seni en çok kızartan iltifat neydi?",
+            "Hiç bir yabancıyla göz göze gelip bütün gece aklından çıkaramadığın oldu mu?",
+            "Yakınlaşmada senin kırmızı çizgin ne?",
+            "Seni en çok ne mutlu eder?",
+            "Birine ilk kez 'seni istiyorum' dediğin anı anlat.",
+            "Gizlice yaptığın ama kimseye söylemediğin romantik bir şey var mı?",
+            "Hiç aldattın mı ya da aldatılma ihtimalini düşünüp korktun mu?",
+            "Bu gruptaki herkesten sadece birine bir gece teklif etmen gerekse kim olurdu?"
+        ];
+
+        // =========================================================================
+        // 2. FIREBASE YAPILANDIRMASI VE YEREL MOD DESTEĞİ
+        // =========================================================================
+        const placeholderConfig = {
+            apiKey: "AIzaSyDjPs2T2vmFmYbBQ1S-uG4CR0DcTCLhcQY",
+            authDomain: "soru-cevap-oyunu.firebaseapp.com",
+            projectId: "soru-cevap-oyunu",
+            storageBucket: "soru-cevap-oyunu.firebasestorage.app",
+            messagingSenderId: "812079219038",
+            appId: "1:812079219038:web:b362a7e08f776989084fcf",
+            measurementId: "G-YEL98EECL2"
+        };
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'soru-cesaret-minimal-v1';
+        const firebaseConfig = typeof __firebase_config !== 'undefined'
+            ? JSON.parse(__firebase_config)
+            : placeholderConfig;
+
+        const isFirebaseConfigured = firebaseConfig.apiKey && firebaseConfig.apiKey !== "BURAYA_FIREBASE_API_KEY_GELECEK";
+
+        let useLocalMode = !isFirebaseConfigured;
+        let db = null;
+        let auth = null;
+        let currentUser = null;
+        let myNickname = "";
+        let currentRoomId = null;
+        let currentRoomData = null;
+
+        // Dinleyiciler ve Zamanlayıcılar
+        let unsubLobby = null;
+        let unsubRoom = null;
+        let unsubChat = null;
+        let stageInterval = null;
+        let autoStartTimeout = null;
+        let botTimer = null;
+        let transitionLock = false;
+
+        // Yerel Simülasyon Deposu (Firebase config girilmemişse bile tam çalışır)
+        const localStore = {
+            rooms: {
+                GENEL1: {
+                    id: 'GENEL1', name: 'Genel Oda #1', code: 'GENEL1', isPublic: true, maxPlayers: 10,
+                    players: {}, phase: 'waiting', phaseStartedAt: null,
+                    questionerId: null, answererId: null, lastQuestionerId: null, lastAnswererId: null,
+                    currentQuestion: '', currentAnswer: '', ratings: {}, createdAt: 1
+                },
+                GENEL2: {
+                    id: 'GENEL2', name: 'Genel Oda #2', code: 'GENEL2', isPublic: true, maxPlayers: 10,
+                    players: {}, phase: 'waiting', phaseStartedAt: null,
+                    questionerId: null, answererId: null, lastQuestionerId: null, lastAnswererId: null,
+                    currentQuestion: '', currentAnswer: '', ratings: {}, createdAt: 2
+                },
+                GENEL3: {
+                    id: 'GENEL3', name: 'Genel Oda #3', code: 'GENEL3', isPublic: true, maxPlayers: 10,
+                    players: {}, phase: 'waiting', phaseStartedAt: null,
+                    questionerId: null, answererId: null, lastQuestionerId: null, lastAnswererId: null,
+                    currentQuestion: '', currentAnswer: '', ratings: {}, createdAt: 3
+                }
+            },
+            messages: {}
+        };
+
+        // =========================================================================
+        // 3. YARDIMCI ARAÇLAR
+        // =========================================================================
+        function showToast(msg, type = 'default') {
+            const box = document.getElementById('toast-container');
+            const styles = {
+                default: 'bg-zinc-900 border-zinc-700 text-zinc-100',
+                error: 'bg-red-950/95 border-red-800 text-red-200',
+                success: 'bg-emerald-950/95 border-emerald-800 text-emerald-200'
+            };
+            const el = document.createElement('div');
+            el.className = `px-4 py-2.5 rounded-xl border text-xs font-medium shadow-lg text-center transition-all duration-200 ${styles[type] || styles.default}`;
+            el.textContent = msg;
+            box.appendChild(el);
+            setTimeout(() => {
+                el.style.opacity = '0';
+                setTimeout(() => el.remove(), 200);
+            }, 3000);
+        }
+
+        function switchView(name) {
+            ['auth', 'lobby', 'room'].forEach(v => document.getElementById(`view-${v}`).classList.add('hidden'));
+            document.getElementById(`view-${name}`).classList.remove('hidden');
+        }
+
+        function esc(str) {
+            const d = document.createElement('div');
+            d.textContent = str;
+            return d.innerHTML;
+        }
+
+        function generateCode() {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            let res = '';
+            for (let i = 0; i < 6; i++) res += chars[Math.floor(Math.random() * chars.length)];
+            return res;
+        }
+
+        // =========================================================================
+        // 4. VERİ KATMANI SOYUTLAMASI (FIRESTORE + LOCAL FALLBACK)
+        // =========================================================================
+        async function initBackend() {
+            if (useLocalMode) {
+                currentUser = { uid: 'local_' + Math.random().toString(36).slice(2, 9) };
+                document.getElementById('conn-dot').className = 'w-2 h-2 rounded-full bg-emerald-500';
+                document.getElementById('conn-text').textContent = 'Hazır (Yerel Test Modu)';
+                return;
+            }
+
+            try {
+                const app = initializeApp(firebaseConfig);
+                try { if (firebaseConfig.measurementId) getAnalytics(app); } catch (e) { console.warn("Analytics başlatılamadı:", e); }
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        currentUser = user;
+                        document.getElementById('conn-dot').className = 'w-2 h-2 rounded-full bg-emerald-500';
+                        document.getElementById('conn-text').textContent = 'Canlı Sunucu Bağlı';
+                        await seedDefaultRooms();
+                    }
+                });
+            } catch (e) {
+                console.warn("Firebase bağlantısı başarısız, yerel moda geçiliyor:", e);
+                useLocalMode = true;
+                currentUser = { uid: 'local_' + Math.random().toString(36).slice(2, 9) };
+                document.getElementById('conn-dot').className = 'w-2 h-2 rounded-full bg-emerald-500';
+                document.getElementById('conn-text').textContent = 'Hazır (Yerel Mod)';
+            }
+        }
+
+        async function seedDefaultRooms() {
+            if (useLocalMode || !db) return;
+            try {
+                const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'rooms');
+                const snap = await getDocs(colRef);
+                const hasPublic = snap.docs.some(d => d.data().isPublic);
+                if (!hasPublic) {
+                    for (const [idx, code] of ['GENEL1', 'GENEL2', 'GENEL3'].entries()) {
+                        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', code), {
+                            id: code,
+                            name: `Genel Oda #${idx + 1}`,
+                            code,
+                            isPublic: true,
+                            maxPlayers: 10,
+                            players: {},
+                            phase: 'waiting',
+                            phaseStartedAt: null,
+                            questionerId: null,
+                            answererId: null,
+                            lastQuestionerId: null,
+                            lastAnswererId: null,
+                            currentQuestion: '',
+                            currentAnswer: '',
+                            ratings: {},
+                            createdAt: Date.now() + idx
+                        });
+                    }
+                }
+            } catch (err) {
+                console.warn("Varsayılan oda oluşturma uyarısı:", err);
+            }
+        }
+
+        function notifyLocalSubscribers() {
+            if (unsubLobby && typeof unsubLobby === 'function' && unsubLobby._isLocal) {
+                renderLobby(Object.values(localStore.rooms).filter(r => r.isPublic));
+            }
+            if (currentRoomId && localStore.rooms[currentRoomId]) {
+                handleRoomSnapshot(JSON.parse(JSON.stringify(localStore.rooms[currentRoomId])));
+                renderChat(localStore.messages[currentRoomId] || []);
+            }
+        }
+
+        async function dbGetRoom(roomId) {
+            if (useLocalMode) return localStore.rooms[roomId] ? JSON.parse(JSON.stringify(localStore.rooms[roomId])) : null;
+            const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId));
+            return snap.exists() ? snap.data() : null;
+        }
+
+        async function dbSetRoom(roomId, data) {
+            if (useLocalMode) {
+                localStore.rooms[roomId] = JSON.parse(JSON.stringify(data));
+                notifyLocalSubscribers();
+                return;
+            }
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId), data);
+        }
+
+        async function dbUpdateRoom(roomId, partial) {
+            if (useLocalMode) {
+                if (!localStore.rooms[roomId]) return;
+                Object.assign(localStore.rooms[roomId], JSON.parse(JSON.stringify(partial)));
+                notifyLocalSubscribers();
+                return;
+            }
+            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId), partial);
+        }
+
+        async function dbDeleteRoom(roomId) {
+            if (useLocalMode) {
+                delete localStore.rooms[roomId];
+                delete localStore.messages[roomId];
+                notifyLocalSubscribers();
+                return;
+            }
+            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId));
+        }
+
+        async function dbAddMessage(roomId, msgObj) {
+            if (useLocalMode) {
+                if (!localStore.messages[roomId]) localStore.messages[roomId] = [];
+                localStore.messages[roomId].push({ id: 'm_' + Date.now() + Math.random(), ...msgObj });
+                if (currentRoomId === roomId) renderChat(localStore.messages[roomId]);
+                return;
+            }
+            const chatCol = collection(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId, 'messages');
+            await addDoc(chatCol, msgObj);
+        }
+
+        // =========================================================================
+        // 5. LOBİ İŞLEMLERİ
+        // =========================================================================
+        function subscribeLobby() {
+            if (unsubLobby) { unsubLobby(); unsubLobby = null; }
+
+            if (useLocalMode) {
+                const fn = () => {};
+                fn._isLocal = true;
+                unsubLobby = fn;
+                renderLobby(Object.values(localStore.rooms).filter(r => r.isPublic));
+                return;
+            }
+
+            const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'rooms');
+            unsubLobby = onSnapshot(colRef, (snap) => {
+                const list = [];
+                snap.forEach(d => { if (d.data().isPublic) list.push(d.data()); });
+                renderLobby(list);
+            });
+        }
+
+        function renderLobby(rooms) {
+            rooms.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+            document.getElementById('rooms-count').textContent = `${rooms.length} oda`;
+            const container = document.getElementById('public-rooms-list');
+
+            if (rooms.length === 0) {
+                container.innerHTML = `<div class="p-6 text-center text-xs text-zinc-500 bg-zinc-900/50 rounded-2xl border border-zinc-800">Aktif genel oda bulunamadı. Yukarıdan yeni bir oda açabilirsin.</div>`;
+                return;
+            }
+
+            container.innerHTML = rooms.map(r => {
+                const count = Object.keys(r.players || {}).length;
+                const max = r.maxPlayers || 10;
+                const full = count >= max;
+                return `
+                    <div class="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-between gap-3">
+                        <div class="min-w-0">
+                            <div class="text-sm font-semibold text-zinc-100 truncate">${esc(r.name)}</div>
+                            <div class="text-xs text-zinc-400 mt-0.5">${count}/${max} oyuncu</div>
+                        </div>
+                        <button onclick="window.joinRoom('${r.id}')" ${full ? 'disabled' : ''}
+                            class="px-4 py-2.5 rounded-xl text-xs font-semibold transition shrink-0 ${
+                                full ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                            }">
+                            ${full ? 'Dolu' : 'Katıl'}
+                        </button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function createNewRoom(isPublic) {
+            if (!currentUser || !myNickname) return;
+            const code = generateCode();
+            const roomData = {
+                id: code,
+                name: isPublic ? `${myNickname}'in Odası` : `Özel Oda (${code})`,
+                code,
+                isPublic,
+                maxPlayers: isPublic ? 10 : 8,
+                players: {},
+                phase: 'waiting',
+                phaseStartedAt: null,
+                questionerId: null,
+                answererId: null,
+                lastQuestionerId: null,
+                lastAnswererId: null,
+                currentQuestion: '',
+                currentAnswer: '',
+                ratings: {},
+                createdAt: Date.now()
+            };
+            await dbSetRoom(code, roomData);
+            await window.joinRoom(code);
+        }
+
+        window.joinRoom = async function(roomId) {
+            if (!currentUser || !myNickname) return;
+            const cleanId = roomId.trim().toUpperCase();
+            const room = await dbGetRoom(cleanId);
+
+            if (!room) {
+                showToast("Bu koda ait aktif bir oda bulunamadı.", "error");
+                return;
+            }
+
+            const players = { ...(room.players || {}) };
+            const max = room.maxPlayers || 10;
+            if (!players[currentUser.uid] && Object.keys(players).length >= max) {
+                showToast(`Oda dolu (${max}/${max}).`, "error");
+                return;
+            }
+
+            players[currentUser.uid] = {
+                uid: currentUser.uid,
+                name: myNickname,
+                score: players[currentUser.uid]?.score || 0,
+                isBot: false,
+                joinedAt: Date.now()
+            };
+
+            currentRoomId = cleanId;
+            transitionLock = false;
+            await dbUpdateRoom(cleanId, { players });
+            await dbAddMessage(cleanId, {
+                senderId: 'SYS', senderName: 'Sistem', text: `${myNickname} odaya katıldı.`, isSystem: true, createdAt: Date.now()
+            });
+
+            enterRoomScreen(cleanId);
+        };
+
+        // =========================================================================
+        // 6. ODA EKRANI VE OTOMATİK TUR DÖNGÜSÜ
+        // =========================================================================
+        function enterRoomScreen(roomId) {
+            if (unsubLobby) { unsubLobby(); unsubLobby = null; }
+            switchView('room');
+            document.getElementById('players-drawer').classList.add('hidden');
+
+            if (useLocalMode) {
+                handleRoomSnapshot(JSON.parse(JSON.stringify(localStore.rooms[roomId])));
+                renderChat(localStore.messages[roomId] || []);
+                return;
+            }
+
+            if (unsubRoom) unsubRoom();
+            unsubRoom = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId), (snap) => {
+                if (!snap.exists()) {
+                    showToast("Oda kapatıldı.", "error");
+                    cleanupRoomAndGoLobby();
+                    return;
+                }
+                handleRoomSnapshot(snap.data());
+            });
+
+            if (unsubChat) unsubChat();
+            unsubChat = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId, 'messages'), (snap) => {
+                const msgs = [];
+                snap.forEach(d => msgs.push({ id: d.id, ...d.data() }));
+                msgs.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+                renderChat(msgs.slice(-80));
+            });
+        }
+
+        function handleRoomSnapshot(data) {
+            currentRoomData = data;
+            const playersMap = data.players || {};
+
+            // 30 saniye kuralıyla odadan atıldıysak lobiye dön
+            if (!playersMap[currentUser.uid]) {
+                clearInterval(stageInterval);
+                clearTimeout(autoStartTimeout);
+                showToast("30 saniye içinde cevap vermediğin için odadan atıldın.", "error");
+                cleanupRoomAndGoLobby();
+                return;
+            }
+
+            renderRoomUI(data);
+            scheduleAutoGameLoop(data);
+        }
+
+        // Adil eşleştirme seçici (son turdaki rolleri tekrar etmemeye çalışır)
+        function pickFairPair(playersArr, lastQId, lastAId) {
+            if (playersArr.length < 2) return null;
+            if (playersArr.length === 2) {
+                // 2 kişi varsa rollerini her tur değiştir
+                if (playersArr[0].uid === lastQId) {
+                    return { questioner: playersArr[1], answerer: playersArr[0] };
+                }
+                return { questioner: playersArr[0], answerer: playersArr[1] };
+            }
+
+            let qCandidates = playersArr.filter(p => p.uid !== lastQId);
+            if (qCandidates.length === 0) qCandidates = playersArr;
+            const questioner = qCandidates[Math.floor(Math.random() * qCandidates.length)];
+
+            let aCandidates = playersArr.filter(p => p.uid !== questioner.uid && p.uid !== lastAId);
+            if (aCandidates.length === 0) aCandidates = playersArr.filter(p => p.uid !== questioner.uid);
+            const answerer = aCandidates[Math.floor(Math.random() * aCandidates.length)];
+
+            return { questioner, answerer };
+        }
+
+        // Otomatik Başlangıç ve Tur Geçişi Koordinatörü
+        function scheduleAutoGameLoop(data) {
+            clearTimeout(autoStartTimeout);
+            const playersArr = Object.values(data.players || {}).sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0));
+
+            // Çakışmayı önlemek için odadaki ilk gerçek oyuncu koordinatör olur
+            const realPlayers = playersArr.filter(p => !p.isBot);
+            const amICoordinator = realPlayers.length > 0 && realPlayers[0].uid === currentUser.uid;
+
+            if (data.phase === 'waiting' && playersArr.length >= 2 && amICoordinator) {
+                autoStartTimeout = setTimeout(async () => {
+                    await startNextRound();
+                }, 3000);
+            }
+        }
+
+        async function startNextRound() {
+            if (transitionLock || !currentRoomId) return;
+            transitionLock = true;
+            clearTimeout(botTimer);
+
+            try {
+                const fresh = await dbGetRoom(currentRoomId);
+                if (!fresh) return;
+                const playersArr = Object.values(fresh.players || {});
+
+                if (playersArr.length < 2) {
+                    await dbUpdateRoom(currentRoomId, {
+                        phase: 'waiting',
+                        phaseStartedAt: null,
+                        questionerId: null,
+                        answererId: null,
+                        currentQuestion: '',
+                        currentAnswer: '',
+                        ratings: {}
+                    });
+                    return;
+                }
+
+                const pair = pickFairPair(playersArr, fresh.questionerId, fresh.answererId);
+                await dbUpdateRoom(currentRoomId, {
+                    phase: 'asking',
+                    phaseStartedAt: Date.now(),
+                    questionerId: pair.questioner.uid,
+                    answererId: pair.answerer.uid,
+                    lastQuestionerId: fresh.questionerId || null,
+                    lastAnswererId: fresh.answererId || null,
+                    currentQuestion: '',
+                    currentAnswer: '',
+                    ratings: {}
+                });
+
+                await dbAddMessage(currentRoomId, {
+                    senderId: 'SYS',
+                    senderName: 'Sistem',
+                    text: `Yeni tur: ${pair.questioner.name} soracak, ${pair.answerer.name} cevaplayacak.`,
+                    isSystem: true,
+                    createdAt: Date.now()
+                });
+
+                // Soran bot ise 2 saniye sonra otomatik soru sorsun
+                if (pair.questioner.isBot) {
+                    botTimer = setTimeout(async () => {
+                        const q = SORULAR[Math.floor(Math.random() * SORULAR.length)];
+                        await submitQuestion(q, pair.questioner.name);
+                    }, 2200);
+                }
+            } finally {
+                transitionLock = false;
+            }
+        }
+
+        function renderRoomUI(data) {
+            const playersMap = data.players || {};
+            const playersArr = Object.values(playersMap).sort((a, b) => (b.score || 0) - (a.score || 0));
+            const max = data.maxPlayers || 10;
+
+            // Header bilgileri
+            document.getElementById('room-name').textContent = data.name;
+            document.getElementById('room-code-badge').textContent = data.code;
+            document.getElementById('room-count-badge').textContent = `(${playersArr.length}/${max})`;
+
+            // Çekmecedeki oyuncu ve skor listesi
+            document.getElementById('players-list').innerHTML = playersArr.map(p => `
+                <div class="flex items-center justify-between px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800/80 text-xs">
+                    <span class="font-medium text-zinc-200 truncate">
+                        ${esc(p.name)} ${p.uid === currentUser.uid ? '<span class="text-indigo-400">(Sen)</span>' : ''}
+                    </span>
+                    <span class="font-semibold text-amber-400 shrink-0">${p.score || 0} ★</span>
+                </div>
+            `).join('');
+
+            // Sahne elemanları
+            const statusLabel = document.getElementById('stage-status-label');
+            const matchupInline = document.getElementById('matchup-inline');
+            const timerPill = document.getElementById('stage-timer-pill');
+            const contentBox = document.getElementById('stage-content-box');
+            const qForm = document.getElementById('question-form');
+            const aForm = document.getElementById('answer-form');
+            const ratingBox = document.getElementById('rating-box');
+
+            qForm.classList.add('hidden');
+            aForm.classList.add('hidden');
+            ratingBox.classList.add('hidden');
+            timerPill.classList.add('hidden');
+            clearInterval(stageInterval);
+
+            const qPlayer = playersMap[data.questionerId];
+            const aPlayer = playersMap[data.answererId];
+            const amIQ = data.questionerId === currentUser.uid;
+            const amIA = data.answererId === currentUser.uid;
+
+            if (data.phase === 'waiting') {
+                matchupInline.classList.add('hidden');
+                if (playersArr.length < 2) {
+                    statusLabel.textContent = 'Oyuncu Bekleniyor';
+                    contentBox.textContent = 'Otomatik başlaması için odaya en az 1 kişi daha katılmalı (veya sağ üstten "+ Botla Test Et").';
+                } else {
+                    statusLabel.textContent = 'Başlıyor...';
+                    contentBox.textContent = 'Eşleşme yapılıyor, 3 saniye içinde oyun başlıyor...';
+                }
+                return;
+            }
+
+            // Aktif turda eşleşmeyi göster
+            matchupInline.classList.remove('hidden');
+            document.getElementById('q-name').textContent = qPlayer ? qPlayer.name : '?';
+            document.getElementById('a-name').textContent = aPlayer ? aPlayer.name : '?';
+
+            if (data.phase === 'asking') {
+                statusLabel.textContent = 'Soru Hazırlanıyor';
+                if (amIQ) {
+                    contentBox.textContent = `${aPlayer?.name || 'Rakibin'} için sorunu yaz:`;
+                    qForm.classList.remove('hidden');
+                } else {
+                    contentBox.textContent = `${qPlayer?.name || 'Soran'} şu an sorusunu yazıyor...`;
+                }
+            }
+            else if (data.phase === 'answering') {
+                statusLabel.textContent = 'Cevap Bekleniyor';
+                timerPill.classList.remove('hidden');
+                contentBox.innerHTML = `<span class="text-zinc-400 text-xs block mb-0.5">Soru:</span><span class="font-medium text-zinc-100">"${esc(data.currentQuestion)}"</span>`;
+
+                if (amIA) {
+                    aForm.classList.remove('hidden');
+                }
+                runCountdown(data.phaseStartedAt, 30, async () => {
+                    await handle30sTimeoutKick();
+                });
+            }
+            else if (data.phase === 'rating') {
+                statusLabel.textContent = 'Puanlama (Sonraki Tur)';
+                timerPill.classList.remove('hidden');
+                contentBox.innerHTML = `
+                    <div class="space-y-1">
+                        <div class="text-xs text-zinc-400">Soru: <span class="text-zinc-200">"${esc(data.currentQuestion)}"</span></div>
+                        <div class="text-sm text-emerald-300 font-medium">Cevap: "${esc(data.currentAnswer)}"</div>
+                    </div>
+                `;
+                ratingBox.classList.remove('hidden');
+                updateStarsUI(data);
+
+                runCountdown(data.phaseStartedAt, 10, async () => {
+                    await startNextRound();
+                });
+            }
+        }
+
+        function runCountdown(startedAt, durationSec, onExpire) {
+            clearInterval(stageInterval);
+            const start = startedAt || Date.now();
+            const limitMs = durationSec * 1000;
+            const pill = document.getElementById('stage-timer-pill');
+
+            const tick = async () => {
+                const remMs = Math.max(0, limitMs - (Date.now() - start));
+                const remSec = Math.ceil(remMs / 1000);
+                pill.textContent = `${remSec}s`;
+
+                if (durationSec === 30 && remSec <= 10) {
+                    pill.className = 'px-2 py-0.5 rounded-md bg-red-950 border border-red-800 font-mono text-xs font-bold text-red-300 shrink-0';
+                } else {
+                    pill.className = 'px-2 py-0.5 rounded-md bg-zinc-800 font-mono text-xs font-bold text-amber-400 shrink-0';
+                }
+
+                if (remMs <= 0) {
+                    clearInterval(stageInterval);
+                    await onExpire();
+                }
+            };
+
+            tick();
+            stageInterval = setInterval(tick, 250);
+        }
+
+        // =========================================================================
+        // 7. 30 SANİYE KURALI (ATILMA) VE YENİ TURA OTOMATİK GEÇİŞ
+        // =========================================================================
+        async function handle30sTimeoutKick() {
+            if (transitionLock || !currentRoomId) return;
+            transitionLock = true;
+
+            try {
+                const fresh = await dbGetRoom(currentRoomId);
+                if (!fresh || fresh.phase !== 'answering') return;
+
+                const kickedId = fresh.answererId;
+                const players = { ...(fresh.players || {}) };
+                const kickedUser = players[kickedId];
+
+                if (kickedUser) {
+                    delete players[kickedId];
+                    const remainingArr = Object.values(players);
+
+                    await dbAddMessage(currentRoomId, {
+                        senderId: 'SYS',
+                        senderName: 'Sistem',
+                        text: `Süre doldu! ${kickedUser.name} 30 saniye içinde cevap vermediği için odadan atıldı.`,
+                        isSystem: true,
+                        createdAt: Date.now()
+                    });
+
+                    // Odada hâlâ en az 2 kişi varsa hiç beklemeden yeni eşleşmeye geç
+                    if (remainingArr.length >= 2) {
+                        const pair = pickFairPair(remainingArr, fresh.questionerId, kickedId);
+                        await dbUpdateRoom(currentRoomId, {
+                            players,
+                            phase: 'asking',
+                            phaseStartedAt: Date.now(),
+                            questionerId: pair.questioner.uid,
+                            answererId: pair.answerer.uid,
+                            currentQuestion: '',
+                            currentAnswer: '',
+                            ratings: {}
+                        });
+                        await dbAddMessage(currentRoomId, {
+                            senderId: 'SYS',
+                            senderName: 'Sistem',
+                            text: `Yeni eşleşme: ${pair.questioner.name} soracak, ${pair.answerer.name} cevaplayacak.`,
+                            isSystem: true,
+                            createdAt: Date.now()
+                        });
+                        if (pair.questioner.isBot) {
+                            botTimer = setTimeout(async () => {
+                                const q = SORULAR[Math.floor(Math.random() * SORULAR.length)];
+                                await submitQuestion(q, pair.questioner.name);
+                            }, 2200);
+                        }
+                    } else {
+                        await dbUpdateRoom(currentRoomId, {
+                            players,
+                            phase: 'waiting',
+                            phaseStartedAt: null,
+                            questionerId: null,
+                            answererId: null,
+                            currentQuestion: '',
+                            currentAnswer: '',
+                            ratings: {}
+                        });
+                    }
+                }
+            } finally {
+                transitionLock = false;
+            }
+        }
+
+        // =========================================================================
+        // 8. SORU GÖNDERME, CEVAPLAMA VE PUANLAMA
+        // =========================================================================
+        document.getElementById('suggest-q-btn').addEventListener('click', () => {
+            document.getElementById('question-input').value = SORULAR[Math.floor(Math.random() * SORULAR.length)];
+        });
+
+        document.getElementById('question-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const inp = document.getElementById('question-input');
+            const val = inp.value.trim();
+            if (!val || !currentRoomData || currentRoomData.questionerId !== currentUser.uid) return;
+            inp.value = '';
+            await submitQuestion(val, myNickname);
+        });
+
+        async function submitQuestion(qText, askerName) {
+            if (!currentRoomId) return;
+            const fresh = await dbGetRoom(currentRoomId);
+            if (!fresh) return;
+
+            await dbUpdateRoom(currentRoomId, {
+                phase: 'answering',
+                phaseStartedAt: Date.now(),
+                currentQuestion: qText
+            });
+
+            await dbAddMessage(currentRoomId, {
+                senderId: 'SYS',
+                senderName: 'Sistem',
+                text: `${askerName} sordu: "${qText}" (Cevap için 30 saniye!)`,
+                isSystem: true,
+                createdAt: Date.now()
+            });
+
+            // Cevaplayan bot ise %75 ihtimalle 5 saniyede cevap versin, %25 ihtimalle süresi dolup atılsın
+            const answerer = (fresh.players || {})[fresh.answererId];
+            if (answerer && answerer.isBot) {
+                if (Math.random() < 0.75) {
+                    const replies = [
+                        "Dürüst olacağım: evet, ama kimseye anlatmamıştım.",
+                        "Kesinlikle tutku, hiç tereddüt etmem.",
+                        "Bunu burada açıklarsam sohbet çok karışır.",
+                        "Geçen yaz buna çok benzer bir anım olmuştu."
+                    ];
+                    botTimer = setTimeout(async () => {
+                        await submitAnswer(replies[Math.floor(Math.random() * replies.length)], answerer.name);
+                    }, 5000);
+                }
+            }
+        }
+
+        document.getElementById('answer-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const inp = document.getElementById('answer-input');
+            const val = inp.value.trim();
+            if (!val || !currentRoomData || currentRoomData.answererId !== currentUser.uid) return;
+            inp.value = '';
+            await submitAnswer(val, myNickname);
+        });
+
+        async function submitAnswer(aText, answererName) {
+            if (!currentRoomId) return;
+            clearInterval(stageInterval);
+            await dbUpdateRoom(currentRoomId, {
+                phase: 'rating',
+                phaseStartedAt: Date.now(),
+                currentAnswer: aText
+            });
+            await dbAddMessage(currentRoomId, {
+                senderId: 'SYS',
+                senderName: 'Sistem',
+                text: `${answererName} cevapladı: "${aText}"`,
+                isSystem: true,
+                createdAt: Date.now()
+            });
+        }
+
+        // Yıldız Puanlama
+        document.querySelectorAll('.rate-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                if (!currentRoomData || currentRoomData.phase !== 'rating') return;
+                const type = btn.dataset.type;
+                const val = parseInt(btn.dataset.val, 10);
+                const myId = currentUser.uid;
+
+                if (type === 'q' && currentRoomData.questionerId === myId) {
+                    showToast("Kendi soruna puan veremezsin.");
+                    return;
+                }
+                if (type === 'a' && currentRoomData.answererId === myId) {
+                    showToast("Kendi cevabına puan veremezsin.");
+                    return;
+                }
+
+                const ratings = { ...(currentRoomData.ratings || {}) };
+                const myVote = ratings[myId] || {};
+                if (myVote[type]) {
+                    showToast("Bu tur zaten puan verdin.");
+                    return;
+                }
+
+                myVote[type] = val;
+                ratings[myId] = myVote;
+
+                const players = { ...(currentRoomData.players || {}) };
+                const targetId = type === 'q' ? currentRoomData.questionerId : currentRoomData.answererId;
+                if (players[targetId]) {
+                    players[targetId].score = (players[targetId].score || 0) + val;
+                }
+
+                await dbUpdateRoom(currentRoomId, { ratings, players });
+                showToast(`+${val} ★ verildi`, "success");
+            });
+        });
+
+        function updateStarsUI(data) {
+            const myVote = (data.ratings || {})[currentUser.uid] || {};
+            document.querySelectorAll('.rate-btn').forEach(btn => {
+                const type = btn.dataset.type;
+                const val = parseInt(btn.dataset.val, 10);
+                if (myVote[type] === val) {
+                    btn.className = 'rate-btn px-2 py-1 rounded bg-amber-500 text-zinc-950 font-bold';
+                } else {
+                    btn.className = 'rate-btn px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300';
+                }
+            });
+        }
+
+        // =========================================================================
+        // 9. GENİŞ ODA SOHBETİ (MOBİL ODAKLI)
+        // =========================================================================
+        document.getElementById('chat-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const inp = document.getElementById('chat-input');
+            const text = inp.value.trim();
+            if (!text || !currentRoomId || !currentUser) return;
+            inp.value = '';
+            await dbAddMessage(currentRoomId, {
+                senderId: currentUser.uid,
+                senderName: myNickname,
+                text,
+                isSystem: false,
+                createdAt: Date.now()
+            });
+        });
+
+        function renderChat(messages) {
+            const box = document.getElementById('chat-messages');
+            const nearBottom = box.scrollHeight - box.scrollTop <= box.clientHeight + 80;
+
+            box.innerHTML = messages.map(m => {
+                if (m.isSystem) {
+                    return `
+                        <div class="py-1 px-2.5 text-center text-xs text-zinc-400 bg-zinc-900/70 rounded-lg border border-zinc-800/60">
+                            ${esc(m.text)}
+                        </div>
+                    `;
+                }
+                const isMe = m.senderId === currentUser.uid;
+                return `
+                    <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'}">
+                        <span class="text-[11px] text-zinc-500 mb-0.5 px-1">${esc(m.senderName)}</span>
+                        <div class="max-w-[85%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                            isMe
+                            ? 'bg-indigo-600 text-white rounded-br-sm'
+                            : 'bg-zinc-900 border border-zinc-800 text-zinc-100 rounded-bl-sm'
+                        }">
+                            ${esc(m.text)}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            if (nearBottom) {
+                box.scrollTop = box.scrollHeight;
+            }
+        }
+
+        // =========================================================================
+        // 10. TEST BOTU, ÇEKMECE, KOPYALAMA VE ÇIKIŞ
+        // =========================================================================
+        document.getElementById('add-bot-btn').addEventListener('click', async () => {
+            if (!currentRoomData || !currentRoomId) return;
+            const players = { ...(currentRoomData.players || {}) };
+            const max = currentRoomData.maxPlayers || 10;
+            if (Object.keys(players).length >= max) {
+                showToast("Oda dolu.", "error");
+                return;
+            }
+
+            const names = ["Aylin", "Kaan", "Selin", "Mert", "Ece", "Burak"];
+            const pick = names.find(n => !Object.values(players).some(p => p.name.startsWith(n))) || `Bot${Math.floor(Math.random() * 99)}`;
+            const botId = `bot_${Date.now()}_${Math.floor(Math.random() * 999)}`;
+
+            players[botId] = { uid: botId, name: `${pick} (Bot)`, score: 0, isBot: true, joinedAt: Date.now() };
+            await dbUpdateRoom(currentRoomId, { players });
+            await dbAddMessage(currentRoomId, {
+                senderId: 'SYS', senderName: 'Sistem', text: `${pick} (Bot) odaya katıldı.`, isSystem: true, createdAt: Date.now()
+            });
+        });
+
+        document.getElementById('toggle-players-btn').addEventListener('click', () => {
+            document.getElementById('players-drawer').classList.toggle('hidden');
+        });
+        document.getElementById('close-players-btn').addEventListener('click', () => {
+            document.getElementById('players-drawer').classList.add('hidden');
+        });
+
+        document.getElementById('copy-code-btn').addEventListener('click', () => {
+            if (!currentRoomId) return;
+            const el = document.createElement('input');
+            el.value = currentRoomId;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            showToast(`Oda kodu kopyalandı: ${currentRoomId}`, "success");
+        });
+
+        async function leaveRoom() {
+            if (!currentRoomId || !currentUser) {
+                cleanupRoomAndGoLobby();
+                return;
+            }
+            const rId = currentRoomId;
+            try {
+                const room = await dbGetRoom(rId);
+                if (room) {
+                    const players = { ...(room.players || {}) };
+                    delete players[currentUser.uid];
+                    const realLeft = Object.values(players).filter(p => !p.isBot);
+
+                    if (!room.isPublic && realLeft.length === 0) {
+                        await dbDeleteRoom(rId);
+                    } else {
+                        const patch = { players };
+                        if (room.questionerId === currentUser.uid || room.answererId === currentUser.uid) {
+                            patch.phase = 'waiting';
+                            patch.phaseStartedAt = null;
+                            patch.questionerId = null;
+                            patch.answererId = null;
+                            patch.currentQuestion = '';
+                            patch.currentAnswer = '';
+                        }
+                        await dbUpdateRoom(rId, patch);
+                        await dbAddMessage(rId, {
+                            senderId: 'SYS', senderName: 'Sistem', text: `${myNickname} odadan ayrıldı.`, isSystem: true, createdAt: Date.now()
+                        });
+                    }
+                }
+            } finally {
+                cleanupRoomAndGoLobby();
+            }
+        }
+
+        function cleanupRoomAndGoLobby() {
+            clearInterval(stageInterval);
+            clearTimeout(autoStartTimeout);
+            clearTimeout(botTimer);
+            if (unsubRoom) { unsubRoom(); unsubRoom = null; }
+            if (unsubChat) { unsubChat(); unsubChat = null; }
+            currentRoomId = null;
+            currentRoomData = null;
+            switchView('lobby');
+            subscribeLobby();
+        }
+
+        document.getElementById('leave-room-btn').addEventListener('click', leaveRoom);
+
+        // =========================================================================
+        // 11. BAŞLANGIÇ OLAYLARI
+        // =========================================================================
+        document.getElementById('nickname-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const val = document.getElementById('nickname-input').value.trim();
+            if (!val) return;
+            myNickname = val;
+            document.getElementById('lobby-nick').textContent = myNickname;
+            switchView('lobby');
+            subscribeLobby();
+        });
+
+        document.getElementById('change-nick-btn').addEventListener('click', () => switchView('auth'));
+        document.getElementById('create-public-btn').addEventListener('click', () => createNewRoom(true));
+        document.getElementById('create-private-btn').addEventListener('click', () => createNewRoom(false));
+
+        document.getElementById('join-code-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const code = document.getElementById('invite-code-input').value.trim().toUpperCase();
+            if (code) window.joinRoom(code);
+        });
+
+        window.addEventListener('beforeunload', () => {
+            if (currentRoomId) leaveRoom();
+        });
+
+        window.onload = initBackend;
+    </script>
+</body>
+</html>
